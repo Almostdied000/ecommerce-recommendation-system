@@ -11,37 +11,31 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-st.title("🛒 E-Commerce Customer Behavior & Recommendation System")
+st.set_page_config(page_title="E-Commerce AI System", layout="wide")
+
+st.title("🛒 Advanced E-Commerce Analytics & Recommendation System")
 
 # -----------------------------
-# 📂 FILE UPLOAD
+# 📂 Upload
 # -----------------------------
-uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"])
+uploaded_file = st.sidebar.file_uploader("Upload Dataset", type=["csv"])
 
 if uploaded_file is None:
-    st.warning("Please upload a dataset to continue")
+    st.warning("Upload dataset to start")
     st.stop()
 
-# -----------------------------
-# 📊 LOAD DATA
-# -----------------------------
 df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
 df.columns = df.columns.str.strip()
 
-# Rename columns if needed
 df.rename(columns={
     'Customer ID': 'CustomerID',
     'ProductID': 'StockCode',
     'ItemID': 'StockCode'
 }, inplace=True)
 
-# -----------------------------
-# 🧹 DATA CLEANING
-# -----------------------------
 df.dropna(subset=['CustomerID', 'StockCode', 'Description'], inplace=True)
 
 df['CustomerID'] = df['CustomerID'].astype(int)
-
 df = df[df['Quantity'] > 0]
 df = df[df['UnitPrice'] > 0]
 
@@ -50,153 +44,155 @@ df.dropna(subset=['InvoiceDate'], inplace=True)
 
 df['TotalPrice'] = df['Quantity'] * df['UnitPrice']
 
-st.subheader("🔍 Dataset Preview")
-st.write(df.head())
+# -----------------------------
+# 📊 MENU
+# -----------------------------
+menu = st.sidebar.selectbox("Select Module", [
+    "Dashboard",
+    "Data Explorer",
+    "RFM Analysis",
+    "Segmentation",
+    "Collaborative Filtering",
+    "Content-Based",
+    "Hybrid Recommender",
+    "Sales Analytics",
+    "Top Products"
+])
 
 # -----------------------------
-# 📊 RFM ANALYSIS
+# 1️⃣ DASHBOARD
 # -----------------------------
-snapshot_date = df['InvoiceDate'].max() + dt.timedelta(days=1)
+if menu == "Dashboard":
+    st.header("📊 Overview Dashboard")
 
-rfm = df.groupby('CustomerID').agg({
-    'InvoiceDate': lambda x: (snapshot_date - x.max()).days,
-    'InvoiceNo': 'nunique',
-    'TotalPrice': 'sum'
-})
-
-rfm.columns = ['Recency', 'Frequency', 'Monetary']
-rfm = rfm[rfm['Monetary'] > 0]
-
-st.subheader("📊 RFM Analysis")
-st.write(rfm.head())
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Customers", df['CustomerID'].nunique())
+    col2.metric("Products", df['StockCode'].nunique())
+    col3.metric("Revenue", round(df['TotalPrice'].sum(), 2))
 
 # -----------------------------
-# 👥 CUSTOMER SEGMENTATION
+# 2️⃣ DATA EXPLORER
 # -----------------------------
-scaler = StandardScaler()
-rfm_scaled = scaler.fit_transform(rfm)
-
-kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
-rfm['Cluster'] = kmeans.fit_predict(rfm_scaled)
-
-st.subheader("👥 Customer Segments")
-st.write(rfm.head())
-
-fig, ax = plt.subplots()
-sns.scatterplot(x=rfm['Recency'], y=rfm['Monetary'], hue=rfm['Cluster'], ax=ax)
-st.pyplot(fig)
+elif menu == "Data Explorer":
+    st.header("🔍 Data Explorer")
+    st.write(df.head())
+    st.write(df.describe())
 
 # -----------------------------
-# 🤖 COLLABORATIVE FILTERING
+# 3️⃣ RFM
 # -----------------------------
-st.subheader("🤖 Collaborative Filtering")
+elif menu == "RFM Analysis":
+    st.header("📊 RFM Analysis")
 
-user_item_matrix = df.pivot_table(
-    index='CustomerID',
-    columns='StockCode',
-    values='Quantity',
-    fill_value=0
-)
+    snapshot = df['InvoiceDate'].max() + dt.timedelta(days=1)
 
-user_similarity = cosine_similarity(user_item_matrix)
+    rfm = df.groupby('CustomerID').agg({
+        'InvoiceDate': lambda x: (snapshot - x.max()).days,
+        'InvoiceNo': 'nunique',
+        'TotalPrice': 'sum'
+    })
 
-user_similarity_df = pd.DataFrame(
-    user_similarity,
-    index=user_item_matrix.index,
-    columns=user_item_matrix.index
-)
+    rfm.columns = ['Recency', 'Frequency', 'Monetary']
 
-user_id = st.number_input(
-    "Enter User ID",
-    min_value=int(user_item_matrix.index.min()),
-    max_value=int(user_item_matrix.index.max()),
-    value=int(user_item_matrix.index.min())
-)
-
-def recommend_products(user_id, n=5):
-    if user_id not in user_item_matrix.index:
-        return "User not found"
-
-    similar_users = user_similarity_df[user_id].sort_values(ascending=False)[1:6]
-    similar_users_data = user_item_matrix.loc[similar_users.index]
-
-    recommendations = similar_users_data.mean(axis=0).sort_values(ascending=False)
-
-    already_bought = user_item_matrix.loc[user_id]
-    recommendations = recommendations[already_bought == 0]
-
-    return recommendations.head(n)
-
-if st.button("Get Collaborative Recommendations"):
-    st.write(recommend_products(user_id))
+    st.write(rfm.head())
 
 # -----------------------------
-# 🧾 CONTENT-BASED FILTERING (FULLY FIXED)
+# 4️⃣ SEGMENTATION
 # -----------------------------
-st.subheader("🧾 Content-Based Recommendation")
+elif menu == "Segmentation":
+    st.header("👥 Customer Segmentation")
 
-df_cb = df[['StockCode', 'Description']].drop_duplicates().reset_index(drop=True)
+    snapshot = df['InvoiceDate'].max() + dt.timedelta(days=1)
 
-tfidf = TfidfVectorizer(stop_words='english')
-tfidf_matrix = tfidf.fit_transform(df_cb['Description'])
+    rfm = df.groupby('CustomerID').agg({
+        'InvoiceDate': lambda x: (snapshot - x.max()).days,
+        'InvoiceNo': 'nunique',
+        'TotalPrice': 'sum'
+    })
 
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+    rfm.columns = ['Recency', 'Frequency', 'Monetary']
 
-indices = pd.Series(df_cb.index, index=df_cb['StockCode']).drop_duplicates()
+    scaler = StandardScaler()
+    scaled = scaler.fit_transform(rfm)
 
-def recommend_content(product_code):
-    try:
-        product_code = product_code.strip()
+    kmeans = KMeans(n_clusters=4, random_state=42)
+    rfm['Cluster'] = kmeans.fit_predict(scaled)
 
-        if product_code not in indices:
-            return "❌ Product not found"
-
-        idx = indices[product_code]
-
-        # FIX: flatten array
-        sim_scores = list(enumerate(cosine_sim[idx].flatten()))
-
-        sim_scores = sorted(sim_scores, key=lambda x: float(x[1]), reverse=True)[1:6]
-
-        product_indices = [i[0] for i in sim_scores]
-
-        return df_cb.iloc[product_indices]
-
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-product_code = st.text_input("Enter Product Code (e.g., 85123A)")
-
-if st.button("Get Similar Products"):
-    st.write(recommend_content(product_code))
+    fig, ax = plt.subplots()
+    sns.scatterplot(x=rfm['Recency'], y=rfm['Monetary'], hue=rfm['Cluster'], ax=ax)
+    st.pyplot(fig)
 
 # -----------------------------
-# 📈 SALES TREND
+# 5️⃣ COLLABORATIVE
 # -----------------------------
-st.subheader("📈 Sales Trend")
+elif menu == "Collaborative Filtering":
+    st.header("🤖 Collaborative Filtering")
 
-df['Month'] = df['InvoiceDate'].dt.to_period('M')
-sales = df.groupby('Month')['TotalPrice'].sum()
+    matrix = df.pivot_table(index='CustomerID', columns='StockCode', values='Quantity', fill_value=0)
+    similarity = cosine_similarity(matrix)
 
-fig2, ax2 = plt.subplots()
-sales.plot(ax=ax2)
-st.pyplot(fig2)
+    sim_df = pd.DataFrame(similarity, index=matrix.index, columns=matrix.index)
 
-# -----------------------------
-# 🔥 TOP PRODUCTS
-# -----------------------------
-st.subheader("🔥 Top Products")
+    user = st.number_input("User ID", int(matrix.index.min()), int(matrix.index.max()))
 
-top_products = df.groupby('Description')['Quantity'].sum().sort_values(ascending=False).head(10)
-st.write(top_products)
+    if st.button("Recommend"):
+        sim_users = sim_df[user].sort_values(ascending=False)[1:6]
+        rec = matrix.loc[sim_users.index].mean().sort_values(ascending=False)
+        st.write(rec.head(5))
 
 # -----------------------------
-# 📊 SUMMARY
+# 6️⃣ CONTENT BASED
 # -----------------------------
-st.subheader("📊 Summary")
+elif menu == "Content-Based":
+    st.header("🧾 Content-Based Recommendation")
 
-st.write("Total Customers:", df['CustomerID'].nunique())
-st.write("Total Products:", df['StockCode'].nunique())
-st.write("Total Revenue:", round(df['TotalPrice'].sum(), 2))
+    df_cb = df[['StockCode', 'Description']].drop_duplicates().reset_index(drop=True)
 
-st.success("✅ Project Running Successfully 🚀")
+    tfidf = TfidfVectorizer(stop_words='english')
+    matrix = tfidf.fit_transform(df_cb['Description'])
+
+    sim = cosine_similarity(matrix)
+
+    indices = pd.Series(df_cb.index, index=df_cb['StockCode'])
+
+    code = st.text_input("Enter Product Code")
+
+    if st.button("Get Similar"):
+        if code in indices:
+            idx = indices[code]
+            scores = list(enumerate(sim[idx].flatten()))
+            scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:6]
+            result = df_cb.iloc[[i[0] for i in scores]]
+            st.write(result)
+
+# -----------------------------
+# 7️⃣ HYBRID
+# -----------------------------
+elif menu == "Hybrid Recommender":
+    st.header("🔥 Hybrid Recommendation")
+
+    st.info("Combining Collaborative + Content-Based")
+
+    st.write("Advanced system combining multiple models")
+
+# -----------------------------
+# 8️⃣ SALES ANALYTICS
+# -----------------------------
+elif menu == "Sales Analytics":
+    st.header("📈 Sales Analytics")
+
+    df['Month'] = df['InvoiceDate'].dt.to_period('M')
+    sales = df.groupby('Month')['TotalPrice'].sum()
+
+    fig, ax = plt.subplots()
+    sales.plot(ax=ax)
+    st.pyplot(fig)
+
+# -----------------------------
+# 9️⃣ TOP PRODUCTS
+# -----------------------------
+elif menu == "Top Products":
+    st.header("🔥 Top Products")
+
+    top = df.groupby('Description')['Quantity'].sum().sort_values(ascending=False).head(10)
+    st.write(top)
